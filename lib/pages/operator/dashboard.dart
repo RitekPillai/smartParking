@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:smartparking/pages/historyPage.dart';
-import 'package:smartparking/pages/nearByParking.dart';
+import 'package:smartparking/pages/operator/activeUser.dart';
 import 'package:smartparking/pages/operator/qrcode.dart';
-import 'package:smartparking/pages/scannerPage.dart';
 import 'package:smartparking/pages/subscription.dart';
 import 'package:smartparking/widgets/quickAction.dart';
 
@@ -351,14 +350,14 @@ class _MainCardsGrid extends StatelessWidget {
             ),
           ),
           quickActiontitle(
-            Icons.history,
-            "Booking History",
-            "View your past bookings",
-            Colors.blue.shade900,
+            Icons.group,
+            "Active Users",
+            "View Booked Users",
+            Colors.deepPurple,
             () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => BookingHistoryScreen()),
+                MaterialPageRoute(builder: (context) => Activeuser()),
               );
             },
           ),

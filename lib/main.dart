@@ -2,6 +2,7 @@ import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:smartparking/pages/auth/authChecker.dart';
+import 'package:smartparking/pages/operator/reg2.dart';
 import 'package:smartparking/pages/roleSelection.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -29,6 +30,7 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       locale: DevicePreview.locale(context),
       builder: DevicePreview.appBuilder,
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         // This is the theme of your application.
         //

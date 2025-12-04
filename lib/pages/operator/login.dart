@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:smartparking/pages/operator/dashboard.dart';
 import 'package:smartparking/pages/operator/reg1.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -38,6 +39,11 @@ class _OperatorLoginScreenState extends State<OperatorLoginScreen> {
       if (res.session != null && res.user != null) {
         var snackBar = SnackBar(content: Text('Login successful! '));
         ScaffoldMessenger.of(context).showSnackBar(snackBar);
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ParkingDashboardApp()),
+        );
       }
     } on AuthException catch (e) {
       print(e.message);

@@ -48,8 +48,9 @@ class _QrCodeScreenState extends State<QrCodeScreen> {
       ); // Corrected access
 
       if (byteData == null) {
-        if (context.mounted)
+        if (context.mounted) {
           _showSnackbar(context, 'Failed to capture QR code data.', Colors.red);
+        }
         return;
       }
 

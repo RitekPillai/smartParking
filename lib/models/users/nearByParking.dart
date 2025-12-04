@@ -1,82 +1,63 @@
+// smartparking/models/users/nearByParking.dart
+
 class NearByParking {
-  // Column: id (int8)
-  final int id;
-
-  // Column: created_at (timestamptz)
-  final DateTime createdAt;
-
-  // Column: name (text)
+  final int? id;
   final String name;
-
-  // Column: distance (float8)
-  final double distance;
-
-  // Column: price_per_hour (float8)
+  final double? distance;
   final double pricePerHour;
-
-  // Column: available_spots (int8)
-  final int availableSpots;
-
-  // Column: area (text)
-  final String area;
-
-  // Column: lat (float8)
+  final int spots;
   final double lat;
+  final double lng; // Assuming 'lang' from DB is mapped to 'lng' here
+  final String? address; // Field you used as 'adress' in error log
+  final String? openTime;
+  final String? closeTime;
+  final String? descrip;
+  final String? image; // Mapped as 'image' in your error log
 
-  // Column: lang (float8)
-  final double lang;
-
-  // Constructor
   NearByParking({
-    required this.id,
-    required this.createdAt,
+    this.id,
     required this.name,
-    required this.distance,
+    this.distance,
     required this.pricePerHour,
-    required this.availableSpots,
-    required this.area,
+    required this.spots,
     required this.lat,
-    required this.lang,
+    required this.lng,
+    this.address,
+    this.openTime,
+    this.closeTime,
+    this.descrip,
+    this.image,
   });
 
-  // Factory method to create a NearByParking object from a Supabase/JSON map
   factory NearByParking.fromJson(Map<String, dynamic> json) {
+    // ⚠️ CRITICAL FIX: Use the ?? operator to provide a default value (0 or 0.0)
+    // when a field that you need as a non-nullable number is null in the database.
+
     return NearByParking(
-      // 'id' is typically BigInt in Dart for int8, but int is usually sufficient
-      // unless the number exceeds 2^53.
-      id: json['id'] as int,
+      // Ensure id is treated as nullable or given a default
+      id: json['id'] as int?,
 
-      // Supabase often returns timestamps as ISO 8601 strings
-      createdAt: DateTime.parse(json['created_at'] as String),
+      // Name is generally non-nullable
+      name: json['name'] as String? ?? 'N/A',
 
-      name: json['name'] as String,
+      // Numeric fields: Use as double? or as int? with a default
+      distance: (json['distance'] as num?)?.toDouble() ?? 0.0,
+      pricePerHour: (json['price_per_hour'] as num?)?.toDouble() ?? 0.0,
 
-      // Use (value as num).toDouble() to safely convert from dynamic or int to double
-      distance: (json['distance'] as num).toDouble(),
-      pricePerHour: (json['price_per_hour'] as num).toDouble(),
+      // If 'spots' is null in the database, use 0 instead of crashing.
+      spots: json['spots'] as int? ?? 0,
 
-      availableSpots: json['available_spots'] as int,
-
-      area: json['area'] as String,
-
-      lat: (json['lat'] as num).toDouble(),
-      lang: (json['lang'] as num).toDouble(),
+      // Latitude/Longitude
+      lat: (json['lat'] as num?)?.toDouble() ?? 0.0,
+      lng:
+          (json['lang'] as num?)?.toDouble() ??
+          0.0, // Assuming 'lang' is your DB column
+      // String fields: Use as String? with a default
+      address: json['adress'] as String?,
+      openTime: json['openTime'] as String?,
+      closeTime: json['closeTime'] as String?,
+      descrip: json['descrip'] as String?,
+      image: json['image'] as String?,
     );
-  }
-
-  // Optional: Method to convert the Dart object back to a JSON map
-  // (useful for INSERT/UPDATE operations)
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'created_at': createdAt.toIso8601String(), // Send back as ISO string
-      'name': name,
-      'distance': distance,
-      'price_per_hour': pricePerHour,
-      'available_spots': availableSpots,
-      'area': area,
-      'lat': lat,
-      'lang': lang,
-    };
   }
 }

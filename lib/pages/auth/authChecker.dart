@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:smartparking/pages/auth/authPage.dart'; // Assuming your Login/RoleSelection is here
+// Assuming your Login/RoleSelection is here
 import 'package:smartparking/pages/homePage.dart'; // Your main user homepage
 import 'package:smartparking/pages/operator/dashboard.dart';
 import 'package:smartparking/pages/roleSelection.dart'; // Initial unauthenticated screen
