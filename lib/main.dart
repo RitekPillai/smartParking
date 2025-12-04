@@ -1,7 +1,7 @@
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:smartparking/pages/homePage.dart';
+import 'package:smartparking/pages/auth/authChecker.dart';
 import 'package:smartparking/pages/roleSelection.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const Homepage(),
+      home: const AuthGate(),
     );
   }
 }

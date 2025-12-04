@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:smartparking/pages/authPage.dart';
+import 'package:smartparking/pages/auth/authPage.dart';
+import 'package:smartparking/pages/operator/login.dart';
 
 // --- Main Application Wrapper ---
 class RoleSelectionScreen extends StatelessWidget {
@@ -209,6 +210,13 @@ class RoleSelectionScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (context) => Loginpage()),
+                    );
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OperatorLoginScreen(),
+                      ),
                     );
                   }
                 },
