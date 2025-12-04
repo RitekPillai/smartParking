@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_upi_india/flutter_upi_india.dart'; // UPI Integration
+// The specific RawSql import is removed/ignored, relying on PostgrestLiteral from core libs
+// Keeping this for PostgrestLiteral definition
 
-// --- 1. BOOKING MODEL ---
+// --- 1. BOOKING MODEL (Unchanged) ---
 
 /// Represents a single parking booking transaction.
 class Booking {
@@ -57,28 +59,25 @@ class Booking {
 // --- 2. CORE BOOKING LOGIC: UPI PAYMENT & CONDITIONAL UPLOAD ---
 // ---------------------------------------------------------------------
 
-// ---------------------------------------------------------------------
-// --- 2. CORE BOOKING LOGIC: UPI PAYMENT & CONDITIONAL UPLOAD ---
-// ---------------------------------------------------------------------
+/// Initiates UPI payment, and on success, uploads the new booking to Supabase
+/// AND **decrements the spot count for the specific parking lot (Isolated Update)**.
+// File: lib/models/users/booking_service.dart (Updated initiateUpiPayment function)
 
-/// Initiates UPI payment, and on success, uploads the new booking to Supabase.
+/// Initiates UPI payment, and on success, uploads the new booking to Supabase
+/// AND **decrements the spot count for the specific parking lot (Isolated Update)**.
 Future<void> initiateUpiPayment({
   required BuildContext context,
-  required int parkingId,
+  required int parkingId, // Used for isolated database update
   required double rate,
   required DateTime startTime,
   required DateTime endTime,
   required String numberPlate,
   required String userName,
-  required double totalAmount, // Pre-calculated amount
+  required double totalAmount, // Pre-calculated amount based on fetched rate
 }) async {
   final supabase = Supabase.instance.client;
 
-  // ✅ FIX 1: Corrected UPI Class Name to UpiIndia()
-
-  // !!! CONFIGURATION REQUIRED !!!
-  // Replace with the actual verified VPA of the parking lot owner
-  const String merchantVpa = "RECEIVER@UPI";
+  const String merchantVpa = "abhishekpillai1350@okaxis";
   const String merchantName = "Smart Parking Vendor";
   // !!! -------------------- !!!
 
@@ -102,8 +101,7 @@ Future<void> initiateUpiPayment({
   // 1. Initiate the UPI Transaction
   try {
     final UpiTransactionResponse response = await UpiPay.initiateTransaction(
-      app: UpiApplication
-          .googlePay, // Defaults to Google Pay, user can choose later
+      app: UpiApplication.googlePay,
       receiverUpiAddress: merchantVpa,
       receiverName: merchantName,
       transactionRef: transactionRef,
@@ -112,9 +110,8 @@ Future<void> initiateUpiPayment({
     );
 
     // 2. Handle UPI Response
-    // ✅ FIX 2: Corrected enum value check from '.success' to '.SUCCESS'
     if (response.status == UpiTransactionStatus.success) {
-      // Payment was successful! Now, upload the booking data.
+      // Payment was successful!
 
       final duration = endTime.difference(startTime);
       final durationHours = duration.inMinutes / 60.0;
@@ -129,18 +126,36 @@ Future<void> initiateUpiPayment({
         'duration_hours': durationHours,
         'price_per_hour': rate,
         'total_amount': totalAmount,
-        'status': 'confirmed', // Payment succeeded
-        'checkout': false, // Still active/checked-in
+        'status': 'confirmed',
+        'checkout': false,
       };
 
-      // 3. Upload to Database
+      // 3a. Upload Booking to 'bookings' table
       await supabase.from('bookings').insert(newBookingData);
+
+      // --- 🔑 FIX: Read-then-Update for Isolated Spot Decrement ---
+      // 3b. Read the current number of spots for the specific parking ID
+      final currentSpotData = await supabase
+          .from('nearByParking')
+          .select('spots')
+          .eq('id', parkingId)
+          .single();
+
+      final currentSpots = currentSpotData['spots'] as int;
+      final newSpots = currentSpots > 0 ? currentSpots - 1 : 0;
+
+      // 3c. Update the 'spots' column with the new, decremented value
+      await supabase
+          .from('nearByParking')
+          .update({'spots': newSpots})
+          .eq('id', parkingId);
+      // -------------------------------------------------------------------
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              "✅ Payment & Booking successful! Total: ₹$amountString",
+              "✅ Payment & Booking successful! Total: ₹$amountString. Spots remaining: $newSpots",
             ),
             backgroundColor: Colors.green,
           ),
@@ -152,7 +167,7 @@ Future<void> initiateUpiPayment({
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              "❌ Payment failed or cancelled. Status: ${response.status}",
+              "❌ Payment failed or cancelled. Status: ${response.status?.name.toUpperCase() ?? 'UNKNOWN'}",
             ),
             backgroundColor: Colors.orange,
           ),
@@ -160,12 +175,12 @@ Future<void> initiateUpiPayment({
       }
     }
   } catch (e) {
-    debugPrint('UPI initiation failed: $e');
+    debugPrint('UPI initiation failed or DB update failed: $e');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "❌ UPI Error: Could not initiate payment: ${e.toString()}",
+            "❌ System Error: Could not complete booking. Please check logs.",
           ),
           backgroundColor: Colors.red,
         ),
@@ -174,9 +189,9 @@ Future<void> initiateUpiPayment({
   }
 }
 
-// ... rest of the code (Booking Sheet, Booking Form, Helper Widget) remains the same ...
-
-// --- FUNCTION: BOOKING SHEET UI (Public access to show the modal) ---
+// ---------------------------------------------------------------------
+// --- 3. BOOKING FORM WIDGET (for Modal Sheet) ---
+// ---------------------------------------------------------------------
 
 /// Displays the BookingForm as a modal bottom sheet.
 void showBookingSheet({
@@ -193,14 +208,10 @@ void showBookingSheet({
   );
 }
 
-// ---------------------------------------------------------------------
-// --- 3. BOOKING FORM WIDGET (for Modal Sheet) ---
-// ---------------------------------------------------------------------
-
 class BookingForm extends StatefulWidget {
   final String parkingName;
   final int parkingId;
-  final double rate;
+  final double rate; // Price per hour fetched from nearByParking
 
   const BookingForm({
     super.key,
@@ -260,7 +271,7 @@ class _BookingFormState extends State<BookingForm> {
             _endTime = _startTime.add(const Duration(hours: 1));
           }
         } else {
-          // Only allow future end times that are after the start time
+          // Only allow end times that are at least 1 minute after the start time
           if (newTime.isAfter(_startTime.add(const Duration(minutes: 1)))) {
             _endTime = newTime;
           } else {
@@ -275,11 +286,12 @@ class _BookingFormState extends State<BookingForm> {
     }
   }
 
-  // --- Calculate total amount for display ---
+  // --- Calculate total amount for display (uses widget.rate) ---
   String calculateTotal() {
     final duration = _endTime.difference(_startTime);
-    if (duration.inMinutes < 0) return 'Invalid Time';
+    if (duration.inMinutes <= 0) return 'Invalid Time';
 
+    // Calculation using fetched rate (widget.rate)
     final durationHours = duration.inMinutes / 60.0;
     final total = durationHours * widget.rate;
     return '₹${total.toStringAsFixed(2)}';
@@ -298,7 +310,7 @@ class _BookingFormState extends State<BookingForm> {
       }
 
       final durationHours = duration.inMinutes / 60.0;
-      final totalAmount = durationHours * widget.rate;
+      final totalAmount = durationHours * widget.rate; // Final calculation
 
       // Close the sheet before payment starts (UX improvement)
       Navigator.pop(context);
@@ -325,6 +337,10 @@ class _BookingFormState extends State<BookingForm> {
       ),
       child: Container(
         padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
         child: Form(
           key: _formKey,
           child: Column(
@@ -363,7 +379,7 @@ class _BookingFormState extends State<BookingForm> {
               ),
               const SizedBox(height: 15),
 
-              // 2. User Name Input (optional but good practice)
+              // 2. User Name Input
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
@@ -382,13 +398,17 @@ class _BookingFormState extends State<BookingForm> {
                   _TimePickerButton(
                     label: 'Start Time',
                     time: _startTime,
-                    onTap: () => _selectTime(context, true),
+                    onTap: () {
+                      _selectTime(context, true).then((_) => setState(() {}));
+                    },
                   ),
                   // End Time
                   _TimePickerButton(
                     label: 'End Time',
                     time: _endTime,
-                    onTap: () => _selectTime(context, false),
+                    onTap: () {
+                      _selectTime(context, false).then((_) => setState(() {}));
+                    },
                   ),
                 ],
               ),

@@ -140,6 +140,14 @@ class _ParkingDashboardState extends State<ParkingDashboard> {
               child: Text("Check out"),
             ),
           ),
+
+          TextButton(
+            onPressed: () {
+              final supabase = Supabase.instance.client;
+              supabase.auth.signOut();
+            },
+            child: Text("sign out"),
+          ),
         ],
       ),
     );

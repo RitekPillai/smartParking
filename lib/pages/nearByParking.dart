@@ -1,25 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+// Assuming BookingForm is defined in bookingService.dart
 import 'package:smartparking/models/users/bookingService.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-// Required for File on Mobile
 
-// Placeholder for your actual model structure
-// You MUST ensure your NearByParking model handles nulls safely!
+// --- DATA MODEL ---
 class NearByParking {
   final int? id;
   final String name;
-  final double? distance; // Used for walk time/distance
-  final double? pricePerHour;
-  final int? spots; // Used for available slots
+  final double? distance;
+  final double? pricePerHour; // Fetched from 'price_per_hour'
+  final int? spots;
   final double? lat;
   final double? lng;
   final String? address;
   final String? openTime;
   final String? closeTime;
   final String? descrip;
-  final String? image;
+  final String? image; // Mapped from 'image_url'
 
   NearByParking({
     this.id,
@@ -36,62 +35,77 @@ class NearByParking {
     this.image,
   });
 
-  // ⚠️ CRITICAL: Ensure this handles nulls (e.g., spots, distance) safely.
   factory NearByParking.fromJson(Map<String, dynamic> json) {
     return NearByParking(
       id: json['id'] as int?,
       name: json['name'] as String? ?? 'Untitled Parking',
-      // Safe conversion from num (int/double) to double, defaulting to 0.0
       distance: (json['distance'] as num?)?.toDouble() ?? 0.0,
       pricePerHour: (json['price_per_hour'] as num?)?.toDouble() ?? 0.0,
       spots: json['spots'] as int? ?? 0,
       lat: (json['lat'] as num?)?.toDouble() ?? 0.0,
       lng: (json['lang'] as num?)?.toDouble() ?? 0.0,
-      address: json['address'] as String?,
+      address: json['adress'] as String?,
       openTime: json['openTime'] as String?,
       closeTime: json['closeTime'] as String?,
       descrip: json['descrip'] as String?,
-      image: json['image_url'] as String?,
+      image: json['image_url'] as String?, // Must match column name in Supabase
     );
   }
 }
 
-// // --- UTILITY FUNCTION: LAUNCH MAPS ---
-// Future<void> _launchMap(
-//   BuildContext context,
-//   double lat,
-//   double lng,
-//   String name,
-// ) async {
-//   final String encodedName = Uri.encodeComponent(name);
-//   final geoUrl = 'geo:$lat,$lng?q=$lat,$lng($encodedName)';
-//   final geoUri = Uri.parse(geoUrl);
-//   final googleMapsUrl = 'https://maps.google.com/?q=$encodedName@$lat,$lng';
-//   final googleMapsUri = Uri.parse(googleMapsUrl);
+// You need to have 'package:url_launcher/url_launcher.dart' imported!
 
-//   try {
-//     if (await launchUrl(geoUri, mode: LaunchMode.externalApplication)) {
-//       return;
-//     } else if (await launchUrl(
-//       googleMapsUri,
-//       mode: LaunchMode.externalApplication,
-//     )) {
-//       return;
-//     } else {
-//       throw Exception('Could not launch any map application.');
-//     }
-//   } catch (e) {
-//     debugPrint('Map launch failed: $e');
-//     if (context.mounted) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         const SnackBar(
-//           content: Text("Could not open maps. Please check device settings."),
-//           backgroundColor: Colors.red,
-//         ),
-//       );
-//     }
-//   }
-// }
+Future<void> _launchMap(
+  BuildContext context,
+  double lat,
+  double lng,
+  String name,
+) async {
+  final String encodedName = Uri.encodeComponent(name);
+
+  // 1. Google Maps Native App Scheme (Most reliable for direction/search)
+  // Use the 'comgooglemaps://' scheme. If the app is installed, this is usually preferred.
+  // The 'daddr' parameter is for the destination address/coordinates.
+  final String googleMapScheme =
+      'comgooglemaps://?q=$lat,$lng&label=$encodedName&directionsmode=driving';
+
+  final Uri googleMapUri = Uri.parse(googleMapScheme);
+
+  // 2. Universal HTTPS Fallback (Works on web and forces app/browser if native scheme fails)
+  final String universalHttpsUrl =
+      'http://maps.google.com/maps?q=$lat,$lng&label=$encodedName';
+
+  final Uri universalHttpsUri = Uri.parse(universalHttpsUrl);
+
+  try {
+    // Attempt 1: Launch the native Google Maps app using its scheme
+    if (await canLaunchUrl(googleMapUri)) {
+      await launchUrl(googleMapUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    // Attempt 2: Fallback to the universal HTTPS URL (opens browser or prompts app choice)
+    else if (await canLaunchUrl(universalHttpsUri)) {
+      await launchUrl(universalHttpsUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    // Final failure
+    else {
+      throw Exception('No URL handler found for map links.');
+    }
+  } catch (e) {
+    debugPrint('Map launch failed: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Could not open maps. Check your app configuration (Info.plist/AndroidManifest).",
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
 
 // --- MAIN SCREEN WIDGET ---
 class NearbyParkingScreen extends StatelessWidget {
@@ -100,19 +114,12 @@ class NearbyParkingScreen extends StatelessWidget {
   Future<List<NearByParking>> _fetchAvailableNearByParking() async {
     final supabase = Supabase.instance.client;
     try {
-      // --- CHANGE IS HERE: Added .eq('checkout', false) ---
       final response = await supabase
           .from('nearByParking')
-          .select('*')
-          .eq(
-            'checkout',
-            false,
-          ); // Only select rows where checkout is FALSE (i.e., available)
-
-      // -----------------------------------------------------
+          .select('*, image_url') // Select all columns including the new one
+          .eq('checkout', false);
 
       if (response.isEmpty) {
-        // If the query returns an empty list, no available parking spots were found.
         return [];
       }
 
@@ -163,7 +170,7 @@ class NearbyParkingScreen extends StatelessWidget {
 
                   const SizedBox(height: 30),
 
-                  // 2. Page Header (Green Icon + Title)
+                  // 2. Page Header (Icon + Title)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -171,10 +178,7 @@ class NearbyParkingScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFF00C853),
-                              Color(0xFF0D47A1),
-                            ], // Adjusted gradient
+                            colors: [Color(0xFF00C853), Color(0xFF0D47A1)],
                           ),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
@@ -217,16 +221,12 @@ class NearbyParkingScreen extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 20),
-
-                  // Location Summary (e.g., "Showing 4 parking areas near you")
-                  const SizedBox(height: 20),
                 ],
               ),
             ),
 
-            // 3. FutureBuilder for Horizontal List
-            SizedBox(
-              height: 579, // Give the horizontal list a fixed height
+            // 3. FutureBuilder for Vertical List
+            Expanded(
               child: FutureBuilder<List<NearByParking>>(
                 future: _fetchAvailableNearByParking(),
                 builder: (context, snapshot) {
@@ -242,7 +242,7 @@ class NearbyParkingScreen extends StatelessWidget {
                     return _buildEmptyState(context);
                   }
 
-                  // --- Data Loaded State (Horizontal Parking List) ---
+                  // --- Data Loaded State (Vertical Parking List) ---
                   final parkingData = snapshot.data!;
                   return ListView.builder(
                     itemCount: parkingData.length,
@@ -250,9 +250,8 @@ class NearbyParkingScreen extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final parking = parkingData[index];
                       return Padding(
-                        padding: EdgeInsets.only(
-                          right: index == parkingData.length - 1 ? 0 : 16.0,
-                        ),
+                        // Vertical padding for card separation
+                        padding: const EdgeInsets.only(bottom: 20.0),
                         child: _ParkingCard(parking: parking),
                       );
                     },
@@ -266,7 +265,7 @@ class NearbyParkingScreen extends StatelessWidget {
     );
   }
 
-  // Extracted Empty/Error State Builder (adjusted for horizontal center)
+  // Extracted Empty/Error State Builder
   Widget _buildEmptyState(BuildContext context) {
     return const Center(
       child: Padding(
@@ -287,69 +286,46 @@ class NearbyParkingScreen extends StatelessWidget {
   }
 }
 
-Future<void> _launchMap(
-  BuildContext context,
-  double lat,
-  double lng,
-  String name,
-) async {
-  // Use a standard Google Maps query URL
-  // The 'daddr' parameter is used for the destination coordinates and name.
-  final String encodedName = Uri.encodeComponent(name);
-  final mapsUrl = 'http://maps.google.com/?daddr=$lat,$lng($encodedName)';
-  final mapsUri = Uri.parse(mapsUrl);
-
-  try {
-    // Launch using externalApplication mode to open the native Maps app
-    if (await launchUrl(mapsUri, mode: LaunchMode.externalApplication)) {
-      return;
-    } else {
-      throw Exception('Could not launch Google Maps.');
-    }
-  } catch (e) {
-    debugPrint('Map launch failed: $e');
-    // Provide user feedback on failure
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Could not open Google Maps."),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-}
-
-// --- WIDGET: Parking List Card (FINAL VERSION) ---
-// --- WIDGET: Parking List Card (FINAL VERSION) ---
+// --- WIDGET: Parking List Card (Interactive with Hero Animation) ---
 class _ParkingCard extends StatelessWidget {
   final NearByParking parking;
 
   const _ParkingCard({required this.parking});
 
+  // Function to show details in a modal
+  void _showParkingDetails(BuildContext context, NearByParking parking) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        // Uses the new detail modal widget
+        return _ParkingDetailModal(parking: parking);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Safely retrieve data using null-aware operators (??)
     final String parkingName = parking.name;
     final String priceText =
         '₹${(parking.pricePerHour ?? 0.0).toStringAsFixed(0)}';
     final String openTime = parking.openTime ?? 'N/A';
     final String closeTime = parking.closeTime ?? 'N/A';
-
     final String slotsText = '${parking.spots ?? 0} slots';
+    final String? imageUrl = parking.image;
 
-    // Coordinates for the map button
+    final String address = parking.address ?? 'No address provided';
+
     final double safeLat = parking.lat ?? 0.0;
     final double safeLng = parking.lng ?? 0.0;
 
-    // Data needed for booking
     final int parkingId = parking.id ?? 0;
-    final double currentRate =
-        parking.pricePerHour ?? 0.0; // Correctly pull rate
+    final double currentRate = parking.pricePerHour ?? 0.0; // Fetched Price
+
+    // Unique tag for Hero animation
+    final String heroTag = 'parking-image-${parking.id}';
 
     return Container(
-      width: 250, // Fixed width for horizontal card
-      // Height is no longer fixed, allowing it to adapt to the two buttons
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -364,24 +340,54 @@ class _ParkingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Image/Placeholder Area
-          Container(
-            height: 100,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blue.shade50, Colors.blue.shade100],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.local_parking,
-                size: 60,
-                color: Colors.blueAccent,
+          // Image wrapped in GestureDetector and Hero
+          GestureDetector(
+            onTap: () => _showParkingDetails(context, parking),
+            child: Hero(
+              tag: heroTag, // Hero tag added here
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+                child: Container(
+                  height: 180,
+                  width: double.infinity,
+                  color: Colors.grey.shade100,
+                  child: (imageUrl != null && imageUrl.isNotEmpty)
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Center(
+                              child: CircularProgressIndicator(
+                                value:
+                                    loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                    : null,
+                                strokeWidth: 2,
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                size: 40,
+                                color: Colors.grey,
+                              ),
+                            );
+                          },
+                        )
+                      : const Center(
+                          child: Icon(
+                            Icons.local_parking,
+                            size: 60,
+                            color: Colors.blueAccent,
+                          ),
+                        ),
+                ),
               ),
             ),
           ),
@@ -402,17 +408,17 @@ class _ParkingCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
 
-                // Row 1: Price and Slots
+                // Price and Slots
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildDetailIcon(
-                      icon: Icons.location_on_outlined,
+                      icon: Icons.attach_money,
                       label: priceText,
                       subLabel: 'Per Hour',
                     ),
                     _buildDetailIcon(
-                      icon: Icons.person_pin_circle_outlined,
+                      icon: Icons.directions_car,
                       label: slotsText,
                       subLabel: 'Available',
                       color: Colors.blue,
@@ -420,16 +426,17 @@ class _ParkingCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
+                // Open and Close Times
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildDetailIcon(
-                      icon: Icons.alarm,
+                      icon: Icons.schedule,
                       label: openTime,
                       subLabel: "Open Time",
                     ),
                     _buildDetailIcon(
-                      icon: Icons.alarm,
+                      icon: Icons.schedule,
                       label: closeTime,
                       subLabel: "Close Time",
                     ),
@@ -476,19 +483,18 @@ class _ParkingCard extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 10), // Separator for buttons
-                // 🌟 NEW BUTTON: Book Now
+                const SizedBox(height: 10),
+                // Button 2: Book Now
                 Container(
                   width: double.infinity,
                   height: 40,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
-                    // Use a primary color for the book button
                     color: Colors.green.shade600,
                   ),
                   child: ElevatedButton(
                     onPressed: () {
-                      // ➡️ CORRECTED CALL: Using the private function name
+                      // Pass the fetched rate to the booking sheet
                       _showBookingSheet(
                         context: context,
                         parkingName: parkingName,
@@ -525,7 +531,7 @@ class _ParkingCard extends StatelessWidget {
   }
 }
 
-// Helper widget for displaying price/slots details (UNMODIFIED)
+// Helper widget for displaying price/slots details
 Widget _buildDetailIcon({
   required IconData icon,
   required String label,
@@ -558,11 +564,7 @@ Widget _buildDetailIcon({
   );
 }
 
-// --- NEW/UPDATED UTILITY FUNCTIONS (Place these in the main screen file) ---
-
-// This function launches the BookingForm as a modal bottom sheet.
-// NOTE: It is still private (starts with _) but is now calling the widget/service
-// functions which were moved to the bookingService.dart file.
+// --- UTILITY FUNCTION: Show Booking Sheet ---
 void _showBookingSheet({
   required BuildContext context,
   required String parkingName,
@@ -576,4 +578,254 @@ void _showBookingSheet({
     builder: (context) =>
         BookingForm(parkingName: parkingName, parkingId: parkingId, rate: rate),
   );
+}
+
+// --- NEW WIDGET: Parking Detail Modal (Enhanced UI with Animation) ---
+class _ParkingDetailModal extends StatelessWidget {
+  final NearByParking parking;
+
+  const _ParkingDetailModal({required this.parking});
+
+  // Helper widget for a styled detail row
+  Widget _buildDetailCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color color = Colors.black,
+  }) {
+    return Card(
+      elevation: 1,
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 15),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: GoogleFonts.alexandria(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: GoogleFonts.alexandria(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper widget to introduce staggered animation for details
+  Widget _buildAnimatedDetailSection(Widget child, int delayMilliseconds) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 500 + delayMilliseconds),
+      curve: Curves.easeOut,
+      builder: (context, opacity, c) {
+        return Opacity(
+          opacity: opacity,
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: (1 - opacity) * 20,
+            ), // Slide in effect
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String? imageUrl = parking.image;
+    final String heroTag = 'parking-image-${parking.id}';
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.9,
+      maxChildSize: 1.0,
+      minChildSize: 0.5,
+      expand: true,
+      builder: (_, controller) {
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F9FE), // Light background
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: ListView(
+            controller: controller,
+            padding: EdgeInsets.zero,
+            children: [
+              // 1. Hero Animated and Zoomable Image Area
+              Hero(
+                tag: heroTag, // Link the image back to the main list card
+                child: Container(
+                  height: 350,
+                  decoration: const BoxDecoration(
+                    color: Colors.black, // Dark background for zoom
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(25),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(25),
+                    ),
+                    child: imageUrl != null && imageUrl.isNotEmpty
+                        ? InteractiveViewer(
+                            // Enables pinch-to-zoom and pan
+                            panEnabled: true,
+                            boundaryMargin: const EdgeInsets.all(20),
+                            minScale: 0.5,
+                            maxScale: 4,
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Center(
+                                    child: Icon(
+                                      Icons.image_not_supported,
+                                      size: 50,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                            ),
+                          )
+                        : const Center(
+                            child: Icon(
+                              Icons.local_parking,
+                              size: 80,
+                              color: Colors.white70,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+
+              // 2. Details Section
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title
+                    _buildAnimatedDetailSection(
+                      Text(
+                        parking.name,
+                        style: GoogleFonts.alexandria(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                        ),
+                      ),
+                      0,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Price Tag
+                    _buildAnimatedDetailSection(
+                      Chip(
+                        label: Text(
+                          '₹${(parking.pricePerHour ?? 0.0).toStringAsFixed(2)} / Hour',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        backgroundColor: const Color(0xFF00C853),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                      ),
+                      50,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Detail Cards with Fade/Slide Animation
+                    _buildAnimatedDetailSection(
+                      _buildDetailCard(
+                        icon: Icons.pin_drop_outlined,
+                        label: 'Address',
+                        value: parking.address ?? 'No address provided',
+                        color: Colors.red.shade400,
+                      ),
+                      100,
+                    ),
+                    _buildAnimatedDetailSection(
+                      _buildDetailCard(
+                        icon: Icons.directions_car_filled,
+                        label: 'Available Slots',
+                        value: '${parking.spots ?? 0} slots remaining',
+                        color: Colors.blue.shade400,
+                      ),
+                      150,
+                    ),
+                    _buildAnimatedDetailSection(
+                      _buildDetailCard(
+                        icon: Icons.access_time,
+                        label: 'Operating Hours',
+                        value:
+                            '${parking.openTime ?? 'N/A'} - ${parking.closeTime ?? 'N/A'}',
+                        color: Colors.orange.shade400,
+                      ),
+                      200,
+                    ),
+
+                    const SizedBox(height: 30),
+
+                    // Description Section
+                    _buildAnimatedDetailSection(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Parking Description',
+                            style: GoogleFonts.alexandria(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            parking.descrip ??
+                                'No detailed description available.',
+                            style: TextStyle(
+                              fontSize: 15,
+                              height: 1.5,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      250,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

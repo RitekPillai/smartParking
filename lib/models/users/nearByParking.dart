@@ -13,6 +13,7 @@ class NearByParking {
   final String? closeTime;
   final String? descrip;
   final String? image; // Mapped as 'image' in your error log
+  final bool? checkout;
 
   NearByParking({
     this.id,
@@ -27,6 +28,7 @@ class NearByParking {
     this.closeTime,
     this.descrip,
     this.image,
+    this.checkout,
   });
 
   factory NearByParking.fromJson(Map<String, dynamic> json) {
@@ -58,6 +60,7 @@ class NearByParking {
       closeTime: json['closeTime'] as String?,
       descrip: json['descrip'] as String?,
       image: json['image'] as String?,
+      checkout: json['checkout'] as bool?,
     );
   }
 }

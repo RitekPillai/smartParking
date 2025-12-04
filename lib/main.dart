@@ -1,10 +1,5 @@
-import 'package:device_preview/device_preview.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:smartparking/pages/auth/authChecker.dart';
-import 'package:smartparking/pages/operator/reg2.dart';
-import 'package:smartparking/pages/payment.dart';
-import 'package:smartparking/pages/roleSelection.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
@@ -13,12 +8,7 @@ void main() async {
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1Ym94Z29ya2pwa3ZyZXlhZG9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2OTQyNzMsImV4cCI6MjA4MDI3MDI3M30.ovTH6ThmcNsTvZOBpHiIDSJcDB7sLEA4-IWJFrOrqEc";
 
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseanonurl);
-  runApp(
-    DevicePreview(
-      enabled: !kReleaseMode,
-      builder: (context) => MyApp(), // Wrap your app
-    ),
-  );
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -29,8 +19,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      locale: DevicePreview.locale(context),
-      builder: DevicePreview.appBuilder,
+      // locale: DevicePreview.locale(context),
+      // builder: DevicePreview.appBuilder,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         // This is the theme of your application.
