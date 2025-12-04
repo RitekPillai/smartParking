@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:smartparking/pages/auth/authChecker.dart';
 import 'package:smartparking/pages/operator/reg2.dart';
+import 'package:smartparking/pages/payment.dart';
 import 'package:smartparking/pages/roleSelection.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

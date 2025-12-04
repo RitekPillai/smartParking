@@ -129,6 +129,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.11"
+  decimal:
+    dependency: transitive
+    description:
+      name: decimal
+      sha256: fc706a5618b81e5b367b01dd62621def37abc096f2b46a9bd9068b64c1fa36d0
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.4"
   device_frame:
     dependency: transitive
     description:
@@ -240,6 +248,22 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_upi_india:
+    dependency: "direct main"
+    description:
+      name: flutter_upi_india
+      sha256: "75d9b0c1a99358147e3d9d871cd3c47e857b490baf668e0aaff1a5dc7c2cba90"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1"
+  flutter_upi_pay:
+    dependency: "direct main"
+    description:
+      name: flutter_upi_pay
+      sha256: ef2983dc9c1faab0fe954654773a6b7eb55f453ba4c8e1113137680a2445fbad
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.2"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -454,7 +478,7 @@ packages:
     source: hosted
     version: "0.2.2"
   intl:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: intl
       sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
@@ -693,6 +717,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.0"
+  rational:
+    dependency: transitive
+    description:
+      name: rational
+      sha256: cb808fb6f1a839e6fc5f7d8cb3b0a10e1db48b3be102de73938c627f0b636336
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.3"
   realtime_client:
     dependency: transitive
     description:

@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:smartparking/models/users/bookingService.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:io'; // Required for File on Mobile
+// Required for File on Mobile
 
 // Placeholder for your actual model structure
 // You MUST ensure your NearByParking model handles nulls safely!
@@ -97,19 +97,32 @@ class NearByParking {
 class NearbyParkingScreen extends StatelessWidget {
   const NearbyParkingScreen({super.key});
 
-  Future<List<NearByParking>> _fetchNearByParking() async {
+  Future<List<NearByParking>> _fetchAvailableNearByParking() async {
     final supabase = Supabase.instance.client;
     try {
-      final response = await supabase.from('nearByParking').select('*');
+      // --- CHANGE IS HERE: Added .eq('checkout', false) ---
+      final response = await supabase
+          .from('nearByParking')
+          .select('*')
+          .eq(
+            'checkout',
+            false,
+          ); // Only select rows where checkout is FALSE (i.e., available)
+
+      // -----------------------------------------------------
+
       if (response.isEmpty) {
+        // If the query returns an empty list, no available parking spots were found.
         return [];
       }
+
       final parkingList = List<NearByParking>.from(
         response.map((map) => NearByParking.fromJson(map)),
       );
+
       return parkingList;
     } catch (e) {
-      debugPrint('Error fetching parking data: $e');
+      debugPrint('Error fetching available parking data: $e');
       return [];
     }
   }
@@ -215,7 +228,7 @@ class NearbyParkingScreen extends StatelessWidget {
             SizedBox(
               height: 579, // Give the horizontal list a fixed height
               child: FutureBuilder<List<NearByParking>>(
-                future: _fetchNearByParking(),
+                future: _fetchAvailableNearByParking(),
                 builder: (context, snapshot) {
                   // --- Loading State ---
                   if (snapshot.connectionState == ConnectionState.waiting) {

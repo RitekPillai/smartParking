@@ -1,14 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:smartparking/pages/historyPage.dart';
 import 'package:smartparking/pages/operator/activeUser.dart';
 import 'package:smartparking/pages/operator/qrcode.dart';
 import 'package:smartparking/pages/subscription.dart';
 import 'package:smartparking/widgets/quickAction.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 void main() {
   runApp(const ParkingDashboardApp());
 }
+
+// Assuming you have initialized your Supabase client
+final supabase = Supabase.instance.client;
+
+Future<void> updateParkingLotAvailability({
+  required int parkingLotId, // The INT8 Primary Key of the nearbyParking record
+  required bool
+  isFull, // true to mark as full/unavailable, false to mark as available
+}) async {
+  try {
+    final updateData = {
+      // Assuming 'checkout' means general lot availability (true = checked out/full)
+      'checkout': isFull,
+    };
+
+    // Use the integer ID to target the specific parking spot row
+    await supabase
+        .from('nearByParking')
+        .update(updateData)
+        .eq('id', parkingLotId);
+
+    print(
+      '✅ nearbyParking ID $parkingLotId availability updated to ${isFull ? "OWNER USING" : "AVAILABLE"}.',
+    );
+  } on PostgrestException catch (error) {
+    print('❌ Supabase Error: ${error.message}');
+  } catch (e) {
+    print('❌ General Error during nearbyParking update: $e');
+  }
+}
+
+// Example Usage:
+// To mark parking lot ID 5 as full:
+// updateParkingLotAvailability(parkingLotId: 5, isFull: true);
+
+// To mark parking lot ID 5 as available:
+// updateParkingLotAvailability(parkingLotId: 5, isFull: false);
+
+// Example Usage:
+// To mark the user's active parking spot as checked out:
+// updateParkingCheckoutAfterFetch(checkoutStatus: true);
 
 class ParkingDashboardApp extends StatelessWidget {
   const ParkingDashboardApp({super.key});
@@ -29,9 +71,15 @@ class ParkingDashboardApp extends StatelessWidget {
   }
 }
 
-class ParkingDashboard extends StatelessWidget {
+class ParkingDashboard extends StatefulWidget {
   const ParkingDashboard({super.key});
 
+  @override
+  State<ParkingDashboard> createState() => _ParkingDashboardState();
+}
+
+class _ParkingDashboardState extends State<ParkingDashboard> {
+  bool ischeckout = false;
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,6 +121,25 @@ class ParkingDashboard extends StatelessWidget {
 
           // --- Operator Tips Section ---
           const _OperatorTipsBox(),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ElevatedButton(
+              style: ButtonStyle(
+                backgroundColor: WidgetStatePropertyAll(Colors.amber),
+              ),
+              onPressed: () {
+                setState(() {
+                  ischeckout = !ischeckout;
+                });
+                updateParkingLotAvailability(
+                  isFull: ischeckout,
+                  parkingLotId: 1,
+                );
+              },
+              child: Text("Check out"),
+            ),
+          ),
         ],
       ),
     );

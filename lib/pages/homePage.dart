@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:smartparking/pages/helpPage.dart';
 import 'package:smartparking/pages/historyPage.dart';
 import 'package:smartparking/pages/housetoUser.dart';
 import 'package:smartparking/pages/nearByParking.dart';
@@ -315,6 +316,10 @@ class _HomepageState extends State<Homepage> {
             ListTile(
               title: Text("Help", style: GoogleFonts.alexandria()),
               leading: const Icon(Icons.help),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => SmartParkingApp()),
+              ),
             ),
             ListTile(
               title: Text("Feedback", style: GoogleFonts.alexandria()),

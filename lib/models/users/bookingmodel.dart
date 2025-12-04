@@ -1,7 +1,5 @@
 // File: lib/models/booking.dart (Revised)
 
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 class Booking {
   final int id;
   final int parkingId;

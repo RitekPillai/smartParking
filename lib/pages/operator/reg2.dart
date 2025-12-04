@@ -5,10 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart'; // NEW: Image Picker
 import 'dart:io'; // NEW: File operations
-import 'package:flutter/foundation.dart' show kIsWeb; // Needed for kIsWeb
-import 'dart:io'; // Needed for File, but only used on Mobile
-import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+// Needed for kIsWeb
+// Needed for File, but only used on Mobile
 // ... other imports
 
 // --- Color Constants ---

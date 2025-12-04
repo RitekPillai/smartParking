@@ -48,6 +48,9 @@ dependencies:
   url_launcher: ^6.3.2
   geolocator: ^14.0.2
   image_picker: ^1.2.1
+  intl: ^0.20.2
+  flutter_upi_india: ^1.0.1
+  flutter_upi_pay: ^0.0.2
 
 dev_dependencies:
   flutter_test:
