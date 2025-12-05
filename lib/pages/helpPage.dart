@@ -246,7 +246,7 @@ class _HelpState extends State<Help> with TickerProviderStateMixin {
                       vertical: 8.0,
                     ),
                     child: Text(
-                      'How to Use Smart Parking',
+                      'How to Use ParkMate',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,

@@ -109,7 +109,7 @@ class _HowToUsePageState extends State<HowToUsePage>
       backgroundColor: const Color(0xFFF7F9FC), // Light grey background
       appBar: AppBar(
         title: const Text(
-          'Smart Parking Guide',
+          'ParkMate Guide',
           style: TextStyle(
             color: Color(0xFF1F2937), // Dark grey text
             fontWeight: FontWeight.w800,

@@ -21,6 +21,7 @@ class RoleSelectionScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
+              const SizedBox(height: 20),
               // --- App Logo ---
               Container(
                 padding: const EdgeInsets.all(12.0),
@@ -38,7 +39,7 @@ class RoleSelectionScreen extends StatelessWidget {
 
               // --- Main Heading ---
               Text(
-                'Smart Parking',
+                'ParkMate',
                 style: GoogleFonts.poppins(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -76,24 +77,7 @@ class RoleSelectionScreen extends StatelessWidget {
 
               const SizedBox(height: 30),
 
-              // --- Skip Option ---
-              TextButton(
-                onPressed: () {
-                  // TODO: Implement navigation to guest mode
-                },
-                child: const Text(
-                  'Skip for now (Browse as Guest)',
-                  style: TextStyle(color: Colors.black54, fontSize: 16),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
               // --- Footer ---
-              const Text(
-                '© 2024 Smart Parking. All rights reserved.',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
             ],
           ),
         ),
