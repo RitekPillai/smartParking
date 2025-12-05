@@ -293,6 +293,7 @@ class _RegistrationStep2ScreenState extends State<RegistrationStep2Screen> {
         'adress': addressController.text,
         'image': _parkingImageUrl,
         'checkout': false,
+        'authid': supabase.auth.currentUser!.id,
       });
 
       // Navigate to the dashboard after successful registration

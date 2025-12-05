@@ -48,7 +48,7 @@ class NearByParking {
       openTime: json['openTime'] as String?,
       closeTime: json['closeTime'] as String?,
       descrip: json['descrip'] as String?,
-      image: json['image_url'] as String?, // Must match column name in Supabase
+      image: json['image'] as String?, // Must match column name in Supabase
     );
   }
 }
@@ -64,8 +64,6 @@ Future<void> _launchMap(
   final String encodedName = Uri.encodeComponent(name);
 
   // 1. Google Maps Native App Scheme (Most reliable for direction/search)
-  // Use the 'comgooglemaps://' scheme. If the app is installed, this is usually preferred.
-  // The 'daddr' parameter is for the destination address/coordinates.
   final String googleMapScheme =
       'comgooglemaps://?q=$lat,$lng&label=$encodedName&directionsmode=driving';
 
@@ -107,31 +105,85 @@ Future<void> _launchMap(
   }
 }
 
-// --- MAIN SCREEN WIDGET ---
-class NearbyParkingScreen extends StatelessWidget {
+// --- MAIN SCREEN WIDGET (STATEFUL) ---
+class NearbyParkingScreen extends StatefulWidget {
   const NearbyParkingScreen({super.key});
 
-  Future<List<NearByParking>> _fetchAvailableNearByParking() async {
+  @override
+  State<NearbyParkingScreen> createState() => _NearbyParkingScreenState();
+}
+
+class _NearbyParkingScreenState extends State<NearbyParkingScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  List<NearByParking> _allParkingList = [];
+  List<NearByParking> _filteredParkingList = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAvailableNearByParking();
+    // Add listener to filter the list whenever the search text changes
+    _searchController.addListener(_filterParkingList);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_filterParkingList);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // Fetch all available parking data initially
+  Future<void> _fetchAvailableNearByParking() async {
+    setState(() {
+      _isLoading = true;
+    });
     final supabase = Supabase.instance.client;
     try {
       final response = await supabase
           .from('nearByParking')
-          .select('*, image_url') // Select all columns including the new one
+          .select('*, image_url')
           .eq('checkout', false);
 
       if (response.isEmpty) {
-        return [];
+        _allParkingList = [];
+      } else {
+        _allParkingList = List<NearByParking>.from(
+          response.map((map) => NearByParking.fromJson(map)),
+        );
       }
 
-      final parkingList = List<NearByParking>.from(
-        response.map((map) => NearByParking.fromJson(map)),
-      );
-
-      return parkingList;
+      // Initialize filtered list with all data
+      _filteredParkingList = _allParkingList;
     } catch (e) {
       debugPrint('Error fetching available parking data: $e');
-      return [];
+      _allParkingList = [];
+      _filteredParkingList = [];
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  // Filter the list based on the search input
+  void _filterParkingList() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredParkingList = _allParkingList;
+      } else {
+        _filteredParkingList = _allParkingList.where((parking) {
+          final parkingNameLower = parking.name.toLowerCase();
+          final addressLower = parking.address?.toLowerCase() ?? '';
+          return parkingNameLower.contains(query) ||
+              addressLower.contains(query);
+        }).toList();
+      }
+    });
   }
 
   @override
@@ -209,7 +261,7 @@ class NearbyParkingScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            "Parking areas closest to your location",
+                            "Search for parking areas by name or address",
                             style: GoogleFonts.alexandria(
                               fontSize: 13,
                               color: Colors.grey,
@@ -221,43 +273,36 @@ class NearbyParkingScreen extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 20),
+
+                  // 3. Animated Search Bar
+                  _AnimatedSearchBar(controller: _searchController),
+
+                  const SizedBox(height: 10),
                 ],
               ),
             ),
 
-            // 3. FutureBuilder for Vertical List
+            // 4. List View (Filtered Data)
             Expanded(
-              child: FutureBuilder<List<NearByParking>>(
-                future: _fetchAvailableNearByParking(),
-                builder: (context, snapshot) {
-                  // --- Loading State ---
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  // --- Error/Empty State ---
-                  if (snapshot.hasError ||
-                      !snapshot.hasData ||
-                      snapshot.data!.isEmpty) {
-                    return _buildEmptyState(context);
-                  }
-
-                  // --- Data Loaded State (Vertical Parking List) ---
-                  final parkingData = snapshot.data!;
-                  return ListView.builder(
-                    itemCount: parkingData.length,
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    itemBuilder: (context, index) {
-                      final parking = parkingData[index];
-                      return Padding(
-                        // Vertical padding for card separation
-                        padding: const EdgeInsets.only(bottom: 20.0),
-                        child: _ParkingCard(parking: parking),
-                      );
-                    },
-                  );
-                },
-              ),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredParkingList.isEmpty
+                  ? _buildEmptyState(
+                      context,
+                      isSearchResult: _searchController.text.isNotEmpty,
+                    )
+                  : ListView.builder(
+                      itemCount: _filteredParkingList.length,
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      itemBuilder: (context, index) {
+                        final parking = _filteredParkingList[index];
+                        return Padding(
+                          // Vertical padding for card separation
+                          padding: const EdgeInsets.only(bottom: 20.0),
+                          child: _ParkingCard(parking: parking),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -266,20 +311,104 @@ class NearbyParkingScreen extends StatelessWidget {
   }
 
   // Extracted Empty/Error State Builder
-  Widget _buildEmptyState(BuildContext context) {
-    return const Center(
+  Widget _buildEmptyState(BuildContext context, {bool isSearchResult = false}) {
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.location_off, size: 40, color: Colors.grey),
-            SizedBox(height: 10),
+            Icon(
+              isSearchResult ? Icons.search_off : Icons.location_off,
+              size: 40,
+              color: Colors.grey,
+            ),
+            const SizedBox(height: 10),
             Text(
-              "No Parking Areas Nearby",
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              isSearchResult
+                  ? "No results found for '${_searchController.text}'"
+                  : "No Parking Areas Nearby",
+              style: const TextStyle(fontSize: 16, color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- WIDGET: Animated Search Bar ---
+class _AnimatedSearchBar extends StatefulWidget {
+  final TextEditingController controller;
+
+  const _AnimatedSearchBar({required this.controller});
+
+  @override
+  State<_AnimatedSearchBar> createState() => _AnimatedSearchBarState();
+}
+
+class _AnimatedSearchBarState extends State<_AnimatedSearchBar> {
+  // Use a state variable to trigger the fade-in animation once
+  bool _startAnimation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start the animation slightly after the widget is built
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          _startAnimation = true;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _startAnimation ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeIn,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 500),
+        transform: Matrix4.translationValues(
+          0.0,
+          _startAnimation ? 0.0 : 20.0, // Slide up effect
+          0.0,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+          border: Border.all(color: Colors.grey.shade200, width: 1),
+        ),
+        child: TextField(
+          controller: widget.controller,
+          decoration: InputDecoration(
+            hintText: 'Search parking by name or address...',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+            suffixIcon: widget.controller.text.isNotEmpty
+                ? IconButton(
+                    icon: Icon(Icons.clear, color: Colors.grey.shade500),
+                    onPressed: () {
+                      widget.controller.clear();
+                      // Manually trigger filter update if needed (although listener handles it)
+                    },
+                  )
+                : null,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 15.0),
+          ),
+          style: GoogleFonts.alexandria(fontSize: 16, color: Colors.black87),
         ),
       ),
     );
@@ -312,9 +441,6 @@ class _ParkingCard extends StatelessWidget {
     final String openTime = parking.openTime ?? 'N/A';
     final String closeTime = parking.closeTime ?? 'N/A';
     final String slotsText = '${parking.spots ?? 0} slots';
-    final String? imageUrl = parking.image;
-
-    final String address = parking.address ?? 'No address provided';
 
     final double safeLat = parking.lat ?? 0.0;
     final double safeLng = parking.lng ?? 0.0;
@@ -324,6 +450,7 @@ class _ParkingCard extends StatelessWidget {
 
     // Unique tag for Hero animation
     final String heroTag = 'parking-image-${parking.id}';
+    final String? imageUrl = parking.image;
 
     return Container(
       decoration: BoxDecoration(
@@ -331,9 +458,9 @@ class _ParkingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: Colors.grey.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -367,6 +494,7 @@ class _ParkingCard extends StatelessWidget {
                                           loadingProgress.expectedTotalBytes!
                                     : null,
                                 strokeWidth: 2,
+                                color: Colors.green.shade600,
                               ),
                             );
                           },

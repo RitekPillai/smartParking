@@ -153,7 +153,14 @@ class _AuthGateState extends State<AuthGate> {
           }
           // C. Role is NULL (Profile data missing after retries)
           else {
-            return const RoleSelectionScreen();
+            // CRITICAL: Session exists but we couldn't determine the role after retries.
+            // Sign the user out to prevent them from being stuck in a loading loop.
+            debugPrint('ERROR: Failed to fetch role. Signing user out.');
+            Supabase.instance.client.auth.signOut();
+            // AuthGate will rebuild and return RoleSelectionScreen in the next cycle.
+            return const Scaffold(
+              body: Center(child: Text('Role data missing. Redirecting...')),
+            );
           }
         },
       );

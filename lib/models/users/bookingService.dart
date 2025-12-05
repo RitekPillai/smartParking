@@ -1,10 +1,7 @@
-// File: lib/models/users/booking_service.dart
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_upi_india/flutter_upi_india.dart'; // UPI Integration
-// The specific RawSql import is removed/ignored, relying on PostgrestLiteral from core libs
+// import 'package:flutter_upi_india/flutter_upi_india.dart'; // UPI Integration (Commented out)
 // Keeping this for PostgrestLiteral definition
 
 // --- 1. BOOKING MODEL (Unchanged) ---
@@ -56,16 +53,12 @@ class Booking {
 }
 
 // ---------------------------------------------------------------------
-// --- 2. CORE BOOKING LOGIC: UPI PAYMENT & CONDITIONAL UPLOAD ---
+// --- 2. CORE BOOKING LOGIC: MOCKED SUCCESS & CONDITIONAL UPLOAD ---
 // ---------------------------------------------------------------------
 
-/// Initiates UPI payment, and on success, uploads the new booking to Supabase
+/// **DEBUG VERSION:** Skips UPI payment and directly uploads the new booking to Supabase
 /// AND **decrements the spot count for the specific parking lot (Isolated Update)**.
-// File: lib/models/users/booking_service.dart (Updated initiateUpiPayment function)
-
-/// Initiates UPI payment, and on success, uploads the new booking to Supabase
-/// AND **decrements the spot count for the specific parking lot (Isolated Update)**.
-Future<void> initiateUpiPayment({
+Future<void> processBooking({
   required BuildContext context,
   required int parkingId, // Used for isolated database update
   required double rate,
@@ -77,9 +70,9 @@ Future<void> initiateUpiPayment({
 }) async {
   final supabase = Supabase.instance.client;
 
-  const String merchantVpa = "abhishekpillai1350@okaxis";
-  const String merchantName = "Smart Parking Vendor";
-  // !!! -------------------- !!!
+  // The UPI details are removed/commented out for debugging
+  // const String merchantVpa = "abhishekpillai1350@okaxis";
+  // const String merchantName = "Smart Parking Vendor";
 
   final userId = supabase.auth.currentUser?.id;
   final String amountString = totalAmount.toStringAsFixed(2);
@@ -95,92 +88,63 @@ Future<void> initiateUpiPayment({
     return;
   }
 
-  // Generate a unique transaction reference
-  final transactionRef = 'BOOKING${DateTime.now().millisecondsSinceEpoch}';
-
-  // 1. Initiate the UPI Transaction
+  // --- MOCK PAYMENT SUCCESS ---
+  // In this debug version, we skip UPI initiation and proceed directly to DB operations.
   try {
-    final UpiTransactionResponse response = await UpiPay.initiateTransaction(
-      app: UpiApplication.googlePay,
-      receiverUpiAddress: merchantVpa,
-      receiverName: merchantName,
-      transactionRef: transactionRef,
-      transactionNote: "Parking Booking for $numberPlate",
-      amount: amountString,
-    );
+    final duration = endTime.difference(startTime);
+    final durationHours = duration.inMinutes / 60.0;
 
-    // 2. Handle UPI Response
-    if (response.status == UpiTransactionStatus.success) {
-      // Payment was successful!
+    final newBookingData = {
+      'parking_id': parkingId,
+      'user_id': userId,
+      'user_name': userName,
+      'number_plate': numberPlate,
+      'start_time': startTime.toUtc().toIso8601String(),
+      'end_time': endTime.toUtc().toIso8601String(),
+      'duration_hours': durationHours,
+      'price_per_hour': rate,
+      'total_amount': totalAmount,
+      'status': 'confirmed',
+      'checkout': false,
+    };
 
-      final duration = endTime.difference(startTime);
-      final durationHours = duration.inMinutes / 60.0;
+    // 1. Upload Booking to 'bookings' table
+    await supabase.from('bookings').insert(newBookingData);
 
-      final newBookingData = {
-        'parking_id': parkingId,
-        'user_id': userId,
-        'user_name': userName,
-        'number_plate': numberPlate,
-        'start_time': startTime.toUtc().toIso8601String(),
-        'end_time': endTime.toUtc().toIso8601String(),
-        'duration_hours': durationHours,
-        'price_per_hour': rate,
-        'total_amount': totalAmount,
-        'status': 'confirmed',
-        'checkout': false,
-      };
+    // 2. Read the current number of spots for the specific parking ID
+    final currentSpotData = await supabase
+        .from('nearByParking')
+        .select('spots')
+        .eq('id', parkingId)
+        .single();
 
-      // 3a. Upload Booking to 'bookings' table
-      await supabase.from('bookings').insert(newBookingData);
+    final currentSpots = currentSpotData['spots'] as int;
+    final newSpots = currentSpots > 0 ? currentSpots - 1 : 0;
 
-      // --- 🔑 FIX: Read-then-Update for Isolated Spot Decrement ---
-      // 3b. Read the current number of spots for the specific parking ID
-      final currentSpotData = await supabase
-          .from('nearByParking')
-          .select('spots')
-          .eq('id', parkingId)
-          .single();
+    // 3. Update the 'spots' column with the new, decremented value
+    await supabase
+        .from('nearByParking')
+        .update({'spots': newSpots})
+        .eq('id', parkingId);
+    // -------------------------------------------------------------------
 
-      final currentSpots = currentSpotData['spots'] as int;
-      final newSpots = currentSpots > 0 ? currentSpots - 1 : 0;
-
-      // 3c. Update the 'spots' column with the new, decremented value
-      await supabase
-          .from('nearByParking')
-          .update({'spots': newSpots})
-          .eq('id', parkingId);
-      // -------------------------------------------------------------------
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "✅ Payment & Booking successful! Total: ₹$amountString. Spots remaining: $newSpots",
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } else {
-      // Payment failed or was cancelled by the user
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "❌ Payment failed or cancelled. Status: ${response.status?.name.toUpperCase() ?? 'UNKNOWN'}",
-            ),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    }
-  } catch (e) {
-    debugPrint('UPI initiation failed or DB update failed: $e');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            "❌ System Error: Could not complete booking. Please check logs.",
+            "✅ DEBUG: Booking successful (Payment Mocked)! Total: ₹$amountString. Spots remaining: $newSpots",
+          ),
+          backgroundColor: Colors.indigo, // Use a distinct color for debug
+        ),
+      );
+    }
+  } catch (e) {
+    debugPrint('DB update failed: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "❌ System Error: Could not complete booking. DB failed.",
           ),
           backgroundColor: Colors.red,
         ),
@@ -297,7 +261,7 @@ class _BookingFormState extends State<BookingForm> {
     return '₹${total.toStringAsFixed(2)}';
   }
 
-  // --- SUBMIT LOGIC (Initiates UPI payment) ---
+  // --- SUBMIT LOGIC (Initiates the booking process) ---
   void submit() {
     if (_formKey.currentState!.validate()) {
       final duration = _endTime.difference(_startTime);
@@ -312,11 +276,12 @@ class _BookingFormState extends State<BookingForm> {
       final durationHours = duration.inMinutes / 60.0;
       final totalAmount = durationHours * widget.rate; // Final calculation
 
-      // Close the sheet before payment starts (UX improvement)
+      // Close the sheet before starting the process
       Navigator.pop(context);
 
-      // Call the payment initiation function
-      initiateUpiPayment(
+      // Call the renamed booking function (which now skips UPI)
+      processBooking(
+        // CHANGED from initiateUpiPayment
         context: context,
         parkingId: widget.parkingId,
         rate: widget.rate,
@@ -447,7 +412,7 @@ class _BookingFormState extends State<BookingForm> {
                     ),
                   ),
                   child: const Text(
-                    'Confirm and Pay',
+                    'Confirm Booking (DEBUG)', // Updated text for clarity
                     style: TextStyle(color: Colors.white, fontSize: 18),
                   ),
                 ),

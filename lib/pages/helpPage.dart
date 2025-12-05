@@ -8,182 +8,117 @@ const Color _lightGreen = Color(
 ); // Very light green for tips background
 const Color _darkGreen = Color(0xFF4CAF50); // Darker green for checkmarks
 
-class SmartParkingApp extends StatelessWidget {
-  const SmartParkingApp({super.key});
+// --- Global Data Structure for Steps (Adapted from the new UI structure) ---
+final List<Map<String, dynamic>> _stepsData = [
+  {
+    'title': 'Create Your Account',
+    'description':
+        'Sign up with your name, email, phone number, and vehicle details. It only takes 2 minutes!',
+    'iconData': Icons.person_outline,
+  },
+  {
+    'title': 'Find Parking Spots',
+    'description':
+        'Search by location name or use "Nearby Parking" to find parking areas around you with real-time availability.',
+    'iconData': Icons.search,
+  },
+  {
+    'title': 'Scan QR Code (Optional)',
+    'description':
+        'At the parking entrance, scan the QR code for instant booking without manual search.',
+    'iconData': Icons.qr_code_scanner,
+  },
+  {
+    'title': 'Select Duration & Pay',
+    'description':
+        'Choose how many hours you need, see the total amount, and pay securely using UPI, cards, or wallets.',
+    'iconData': Icons.account_balance_wallet_outlined,
+  },
+  {
+    'title': 'Track Your Time',
+    'description':
+        'Monitor remaining parking time on the timer page. Get notifications when time is running out.',
+    'iconData': Icons.access_time,
+  },
+  {
+    'title': 'Rate & Exit',
+    'description':
+        'When leaving, click "End Parking" and share your experience by rating the parking area.',
+    'iconData': Icons.star_outline,
+  },
+];
+
+// --- Main Page (Stateful for Animation Management) ---
+class Help extends StatefulWidget {
+  const Help({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Smart Parking Guide',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        // Use a more modern text style for better readability
-        fontFamily: 'Roboto',
-      ),
-      home: const GuideScreen(),
-    );
-  }
+  State<Help> createState() => _HelpState();
 }
 
-class GuideScreen extends StatelessWidget {
-  const GuideScreen({super.key});
+class _HelpState extends State<Help> with TickerProviderStateMixin {
+  // Animation Controllers and Animations for staggered effect
+  late List<AnimationController> _controllers;
+  late List<Animation<Offset>> _slideAnimations;
+  late List<Animation<double>> _fadeAnimations;
 
   @override
-  Widget build(BuildContext context) {
-    // The screen uses a SingleChildScrollView for the content and a distinct bottom section.
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
-          // 1. Scrollable Content Area
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(
-                bottom: 24.0,
-              ), // Padding before the bottom section
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(context),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 20.0,
-                      vertical: 8.0,
-                    ),
-                    child: Text(
-                      'How to Use Smart Parking',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20.0),
-                    child: Text(
-                      'Your complete guide to hassle-free parking',
-                      style: TextStyle(fontSize: 14, color: Colors.black54),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Guide Steps
-                  _buildStepItem(
-                    stepNumber: 1,
-                    title: 'Create Your Account',
-                    description:
-                        'Sign up with your name, email, phone number, and vehicle details. It only takes 2 minutes!',
-                    iconData: Icons.person_outline,
-                  ),
-                  _buildStepItem(
-                    stepNumber: 2,
-                    title: 'Find Parking Spots',
-                    description:
-                        'Search by location name or use "Nearby Parking" to find parking areas around you with real-time availability.',
-                    iconData: Icons.search,
-                  ),
-                  _buildStepItem(
-                    stepNumber: 3,
-                    title: 'Scan QR Code (Optional)',
-                    description:
-                        'At the parking entrance, scan the QR code for instant booking without manual search.',
-                    iconData: Icons.qr_code_scanner,
-                  ),
-                  _buildStepItem(
-                    stepNumber: 4,
-                    title: 'Select Duration & Pay',
-                    description:
-                        'Choose how many hours you need, see the total amount, and pay securely using UPI, cards, or wallets.',
-                    iconData: Icons.account_balance_wallet_outlined,
-                  ),
-                  _buildStepItem(
-                    stepNumber: 5,
-                    title: 'Track Your Time',
-                    description:
-                        'Monitor remaining parking time on the timer page. Get notifications when time is running out.',
-                    iconData: Icons.access_time,
-                  ),
-                  _buildStepItem(
-                    stepNumber: 6,
-                    title: 'Rate & Exit',
-                    description:
-                        'When leaving, click "End Parking" and share your experience by rating the parking area.',
-                    iconData: Icons.star_outline,
-                    isLast: true, // No bottom margin for the last item
-                  ),
-
-                  // Tips Section
-                  const SizedBox(height: 32),
-                  const _TipSection(),
-                ],
-              ),
-            ),
-          ),
-
-          // 2. CTA Footer Section
-          const _CtaSection(),
-
-          // 3. Bottom Bar (Mock) - Matches the image's overlay
-          const _BottomActionBar(),
-        ],
+  void initState() {
+    super.initState();
+    // Initialize one controller for each step
+    _controllers = List.generate(
+      _stepsData.length,
+      (index) => AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 600),
       ),
     );
+
+    // Define the slide animation (start slightly below, end at original position)
+    _slideAnimations = _controllers
+        .map(
+          (controller) =>
+              Tween<Offset>(
+                begin: const Offset(0.0, 0.4), // Start slightly below
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(parent: controller, curve: Curves.easeOutCubic),
+              ),
+        )
+        .toList();
+
+    // Define the fade animation (start transparent, end fully opaque)
+    _fadeAnimations = _controllers
+        .map(
+          (controller) => Tween<double>(
+            begin: 0.0,
+            end: 1.0,
+          ).animate(CurvedAnimation(parent: controller, curve: Curves.easeIn)),
+        )
+        .toList();
+
+    // Start the animations in sequence
+    _startStaggeredAnimations();
   }
 
-  // --- Widget Builders ---
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        left: 20,
-        right: 20,
-        bottom: 16,
-      ),
-      child: Column(
-        children: [
-          // Back to Home Row
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.black87),
-                onPressed: () {
-                  // Handle back action
-                },
-              ),
-              const Text(
-                'Back to Home',
-                style: TextStyle(fontSize: 16, color: Colors.black87),
-              ),
-              const Spacer(),
-              // Centered Icon
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: _primaryBlue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _primaryBlue.withOpacity(0.2),
-                    width: 1.5,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.smartphone,
-                  color: _primaryBlue,
-                  size: 28,
-                ),
-              ),
-              const Spacer(flex: 2), // Adjust spacer to center the icon better
-            ],
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
+  void _startStaggeredAnimations() async {
+    for (int i = 0; i < _controllers.length; i++) {
+      // Delay before starting the next step's animation
+      await Future.delayed(const Duration(milliseconds: 150));
+      _controllers[i].forward();
+    }
   }
+
+  @override
+  void dispose() {
+    // Dispose all controllers to prevent memory leaks
+    for (var controller in _controllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  // --- Widget Builders for Steps (Integrated into the State class) ---
 
   Widget _buildStepItem({
     required int stepNumber,
@@ -239,7 +174,7 @@ class GuideScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // Right: Secondary Icon (from image, used as a visual guide next to step number container)
+          // Right: Secondary Icon
           Container(
             width: 40,
             height: 40,
@@ -249,6 +184,114 @@ class GuideScreen extends StatelessWidget {
             ),
             child: Icon(iconData, color: _primaryBlue, size: 20),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 8,
+        left: 5,
+        right: 20,
+        bottom: 16,
+      ),
+      child: Column(
+        children: [
+          // Back to Home Row
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                onPressed: () {
+                  // Handle back action
+                  Navigator.pop(context);
+                },
+              ),
+              const Text(
+                'Back to Home',
+                style: TextStyle(fontSize: 16, color: Colors.black87),
+              ),
+              const Spacer(),
+
+              // Centered Icon
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Column(
+        children: [
+          // 1. Scrollable Content Area
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(
+                bottom: 24.0,
+              ), // Padding before the bottom section
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 20.0,
+                      vertical: 8.0,
+                    ),
+                    child: Text(
+                      'How to Use Smart Parking',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Text(
+                      'Your complete guide to hassle-free parking',
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Guide Steps (Animated via List.generate)
+                  ...List.generate(_stepsData.length, (index) {
+                    final stepData = _stepsData[index];
+                    return SlideTransition(
+                      position: _slideAnimations[index],
+                      child: FadeTransition(
+                        opacity: _fadeAnimations[index],
+                        child: _buildStepItem(
+                          stepNumber: index + 1,
+                          title: stepData['title']!,
+                          description: stepData['description']!,
+                          iconData: stepData['iconData']!,
+                          isLast: index == _stepsData.length - 1,
+                        ),
+                      ),
+                    );
+                  }),
+
+                  // Tips Section
+                  const SizedBox(height: 32),
+                  const _TipSection(),
+                ],
+              ),
+            ),
+          ),
+
+          // 2. CTA Footer Section
+          const _CtaSection(),
+          // Removed: _BottomActionBar, as requested by the user.
         ],
       ),
     );
@@ -411,53 +454,6 @@ class _CtaSection extends StatelessWidget {
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// --- Bottom Action Bar (Mocking the app's persistent bar) ---
-class _BottomActionBar extends StatelessWidget {
-  const _BottomActionBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.directions_car_filled,
-            color: _primaryBlue,
-            size: 24,
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'Smart Parking',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-              fontSize: 16,
-            ),
-          ),
-          const Spacer(),
-          const Text(
-            'Hello, muhsinjhm!',
-            style: TextStyle(color: Colors.black54, fontSize: 14),
-          ),
-          const SizedBox(width: 12),
-          const Icon(Icons.menu, color: Colors.black54),
         ],
       ),
     );

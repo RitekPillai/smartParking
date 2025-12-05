@@ -1,105 +1,109 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart'; // Import for debugPrint
 
-// Initialize Supabase client globally
-final supabase = Supabase.instance.client;
-
-// --- DATA MODEL for Operator Profile ---
-class OperatorProfileData {
+// --- DATA MODEL (Extending for profile details) ---
+class UserProfileData {
   final String id;
   final String email;
   final String username;
   final String phoneno;
+  final String? vehicleNumber; // Added based on UI reference
 
-  OperatorProfileData({
+  UserProfileData({
     required this.id,
     required this.email,
     required this.username,
     required this.phoneno,
+    this.vehicleNumber,
   });
 
   // Factory constructor to combine data from auth and 'users' table
-  static OperatorProfileData fromJson(
+  static UserProfileData fromJson(
     User authUser,
     Map<String, dynamic>? userData,
   ) {
-    return OperatorProfileData(
+    return UserProfileData(
       id: authUser.id,
       email: authUser.email ?? 'N/A',
-      // The users table typically holds the username
-      username: userData?['username'] as String? ?? 'Operator',
+      username: userData?['username'] as String? ?? 'New User',
       phoneno: userData?['phoneno'] as String? ?? 'N/A',
+      // Assuming 'vehicle_number' field exists in the 'users' table for saving
+      vehicleNumber: userData?['vehicle_number'] as String?,
     );
   }
 }
 
 // --- MAIN SCREEN WIDGET ---
-class OperatorProfileScreen extends StatefulWidget {
-  const OperatorProfileScreen({super.key});
+class UserProfileScreen extends StatefulWidget {
+  const UserProfileScreen({super.key});
 
   @override
-  State<OperatorProfileScreen> createState() => _OperatorProfileScreenState();
+  State<UserProfileScreen> createState() => _UserProfileScreenState();
 }
 
-class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
-  OperatorProfileData? _profileData;
+class _UserProfileScreenState extends State<UserProfileScreen> {
+  UserProfileData? _profileData;
   bool _isLoading = true;
   bool _isEditing = false;
   bool _isSaving = false;
 
-  // Controller for the editable field
+  // Controllers for editable fields
   late TextEditingController _usernameController;
+  late TextEditingController _vehicleNumberController;
 
   @override
   void initState() {
     super.initState();
     _usernameController = TextEditingController();
+    _vehicleNumberController = TextEditingController();
     _fetchUserData();
   }
 
   @override
   void dispose() {
     _usernameController.dispose();
+    _vehicleNumberController.dispose();
     super.dispose();
   }
 
   // --- Supabase Data Fetching ---
   Future<void> _fetchUserData() async {
+    final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
 
     if (user == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Operator not logged in.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('User not logged in.')));
         setState(() => _isLoading = false);
       }
       return;
     }
 
     try {
-      // Fetch user data from the 'users' table
+      // 1. Fetch user data from the 'users' table
       final response = await supabase
           .from('users')
-          .select('username, phoneno')
+          .select('username, phoneno, vehicle_number')
           .eq('id', user.id)
           .single();
 
       if (mounted) {
         setState(() {
-          _profileData = OperatorProfileData.fromJson(user, response);
+          _profileData = UserProfileData.fromJson(user, response);
           _usernameController.text = _profileData!.username;
+          _vehicleNumberController.text = _profileData!.vehicleNumber ?? '';
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error fetching operator data: $e');
+      debugPrint('Error fetching user data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Failed to load profile data. Check connection.'),
+            content: Text('Failed to load profile data. Please try again.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -116,22 +120,31 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
       _isSaving = true;
     });
 
+    final supabase = Supabase.instance.client;
     final String newUsername = _usernameController.text.trim();
+    final String newVehicleNumber = _vehicleNumberController.text.trim();
 
     try {
       await supabase
           .from('users')
-          .update({'username': newUsername})
+          .update({
+            'username': newUsername,
+            // Assuming 'vehicle_number' column exists
+            'vehicle_number': newVehicleNumber.isNotEmpty
+                ? newVehicleNumber
+                : null,
+          })
           .eq('id', _profileData!.id);
 
       // Update local state with new data
       if (mounted) {
         setState(() {
-          _profileData = OperatorProfileData(
+          _profileData = UserProfileData(
             id: _profileData!.id,
             email: _profileData!.email,
             username: newUsername,
             phoneno: _profileData!.phoneno,
+            vehicleNumber: newVehicleNumber,
           );
           _isEditing = false;
           _isSaving = false;
@@ -139,16 +152,16 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Profile updated successfully!'),
-            backgroundColor: Color(0xFF28A745), // Green success color
+            backgroundColor: Color(0xFF00C853), // Green success color
           ),
         );
       }
     } catch (e) {
-      debugPrint('Error updating operator data: $e');
+      debugPrint('Error updating user data: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Failed to save changes. Please try again.'),
+            content: Text('Failed to save changes. Please check your input.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -159,18 +172,12 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
     }
   }
 
-  // --- Sign Out Logic ---
-  void _signOut() {
-    supabase.auth.signOut();
-    // Assuming Navigator.pop until the root is required after sign out
-    Navigator.of(context).popUntil((route) => route.isFirst);
-  }
-
   // --- UI Helpers ---
   void _toggleEdit(bool editing) {
     if (editing) {
-      // Start editing: populate controller with current data
+      // Start editing: populate controllers with current data
       _usernameController.text = _profileData?.username ?? '';
+      _vehicleNumberController.text = _profileData?.vehicleNumber ?? '';
     }
     setState(() {
       _isEditing = editing;
@@ -194,7 +201,7 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Back to Dashboard and Edit Button Row
+                  // 1. Back to Home and Edit Button Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -203,16 +210,16 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                           Navigator.of(context).pop();
                         },
                         child: Row(
-                          children: [
-                            const Icon(
+                          children: const [
+                            Icon(
                               Icons.arrow_back,
                               size: 18,
                               color: Colors.grey,
                             ),
-                            const SizedBox(width: 4),
+                            SizedBox(width: 4),
                             Text(
-                              "Back to Dashboard",
-                              style: GoogleFonts.inter(
+                              "Back to Home",
+                              style: TextStyle(
                                 color: Colors.grey,
                                 fontSize: 14,
                               ),
@@ -228,8 +235,8 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
 
                   // 2. Page Header
                   Text(
-                    "Operator Profile",
-                    style: GoogleFonts.inter(
+                    "My Profile",
+                    style: GoogleFonts.alexandria(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
@@ -237,8 +244,11 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "Review and update your operational credentials.",
-                    style: GoogleFonts.inter(fontSize: 14, color: Colors.grey),
+                    "Manage your personal and vehicle details",
+                    style: GoogleFonts.alexandria(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -250,7 +260,7 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _profileData == null
-                  ? const Center(child: Text("Could not load operator data."))
+                  ? const Center(child: Text("Could not load user data."))
                   : SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: Column(
@@ -258,7 +268,7 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                         children: [
                           _AnimatedProfileField(
                             delay: 0,
-                            label: "Display Name (Username)",
+                            label: "Username",
                             icon: Icons.person_outline,
                             isEditing: _isEditing,
                             controller: _usernameController,
@@ -267,7 +277,7 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                           ),
                           _AnimatedProfileField(
                             delay: 100,
-                            label: "Email Address (Operator ID)",
+                            label: "Email Address (Cannot be changed)",
                             icon: Icons.mail_outline,
                             isEditing: false, // Always false
                             value: _profileData!.email,
@@ -276,48 +286,24 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                           ),
                           _AnimatedProfileField(
                             delay: 200,
-                            label: "Phone Number",
+                            label: "Phone Number (Cannot be changed)",
                             icon: Icons.phone_android,
                             isEditing: false, // Always false
                             value: _profileData!.phoneno,
                             readOnlyNote:
-                                "Your phone is used for communication and cannot be modified.",
+                                "Your phone is used for notifications and cannot be modified.",
                           ),
-                          const SizedBox(height: 30),
-
-                          // --- SIGN OUT BUTTON (Full Width) ---
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _signOut,
-                              icon: const Icon(
-                                Icons.logout,
-                                color: Colors.white,
-                              ),
-                              label: Text(
-                                "Sign Out of Operator Account",
-                                style: GoogleFonts.inter(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(
-                                  0xFFDC3545,
-                                ), // Red/Danger color
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 15,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                elevation: 5,
-                              ),
-                            ),
+                          _AnimatedProfileField(
+                            delay: 300,
+                            label: "Vehicle Number",
+                            icon: Icons.time_to_leave,
+                            isEditing: _isEditing,
+                            controller: _vehicleNumberController,
+                            hintText: "Enter your vehicle registration number",
+                            readOnlyNote: "Used for spot verification.",
                           ),
-
-                          const SizedBox(height: 30),
+                          const SizedBox(height: 20),
+                          // Security Note
                           const _SecurityNote(),
                           const SizedBox(height: 40),
                         ],
@@ -346,14 +332,14 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                   onPressed: _isSaving ? null : () => _toggleEdit(false),
                   child: Text(
                     'Cancel',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.alexandria(
                       color: Colors.red.shade400,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Save Button
+                // Save Button (Gradient style like in NearbyParkingScreen)
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
@@ -364,9 +350,9 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                               Colors.grey.shade500,
                             ] // Greyed out when saving
                           : const [
+                              Color(0xFF00C853),
                               Color(0xFF0D47A1),
-                              Color(0xFF2196F3),
-                            ], // Blue gradient (matching dashboard)
+                            ], // Green/Blue gradient
                     ),
                   ),
                   child: ElevatedButton(
@@ -392,7 +378,7 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
                           )
                         : Text(
                             'Save',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.alexandria(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
@@ -408,18 +394,18 @@ class _OperatorProfileScreenState extends State<OperatorProfileScreen> {
               icon: const Icon(Icons.edit, size: 18, color: Colors.white),
               label: Text(
                 'Edit',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.alexandria(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2196F3), // Blue color
+                backgroundColor: const Color(0xFF0D47A1), // Blue color
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
                 elevation: 4,
-                shadowColor: const Color(0xFF2196F3).withOpacity(0.4),
+                shadowColor: const Color(0xFF0D47A1).withOpacity(0.4),
               ),
             ),
     );
@@ -450,7 +436,7 @@ class _AnimatedProfileField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Staggered animation wrapper
+    // Staggered animation wrapper (similar to _ParkingDetailModal)
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 500 + delay),
@@ -473,7 +459,7 @@ class _AnimatedProfileField extends StatelessWidget {
           // Label text for the field
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.alexandria(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: Colors.black87,
@@ -513,7 +499,10 @@ class _AnimatedProfileField extends StatelessWidget {
                       hintText: hintText,
                       contentPadding: EdgeInsets.zero,
                     ),
-                    style: GoogleFonts.inter(fontSize: 16, color: Colors.black),
+                    style: GoogleFonts.alexandria(
+                      fontSize: 16,
+                      color: Colors.black,
+                    ),
                   )
                 : // Read-only Display
                   Row(
@@ -525,7 +514,7 @@ class _AnimatedProfileField extends StatelessWidget {
                           controller?.text.isNotEmpty == true
                               ? controller!.text
                               : (value ?? 'N/A'),
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.alexandria(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,
@@ -538,14 +527,15 @@ class _AnimatedProfileField extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           // Helper note (only for read-only fields or when editing is off)
-          if (!isEditing)
+          if (!isEditing &&
+              (label.contains("Cannot be changed") ||
+                  label.contains("Email Address") ||
+                  label.contains("Phone Number")))
             Text(
               readOnlyNote,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.alexandria(
                 fontSize: 11,
-                color: label.contains("cannot be modified")
-                    ? Colors.red.shade400
-                    : Colors.grey.shade600,
+                color: Colors.red.shade400,
               ),
             ),
         ],
@@ -570,15 +560,15 @@ class _SecurityNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.security, color: Colors.blue.shade700, size: 20),
+          Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text.rich(
               TextSpan(
                 children: [
                   TextSpan(
-                    text: 'Security Note: ',
-                    style: GoogleFonts.inter(
+                    text: 'Note: ',
+                    style: GoogleFonts.alexandria(
                       fontWeight: FontWeight.bold,
                       color: Colors.blue.shade800,
                       fontSize: 14,
@@ -586,8 +576,8 @@ class _SecurityNote extends StatelessWidget {
                   ),
                   TextSpan(
                     text:
-                        'Your account is secured via Supabase. Always keep your credentials safe. Sensitive details like email and phone number must be changed via administrative access or support.',
-                    style: GoogleFonts.inter(
+                        'For security reasons, email and phone number cannot be changed directly. If you need to update these, please contact support.',
+                    style: GoogleFonts.alexandria(
                       color: Colors.blue.shade800,
                       fontSize: 14,
                       height: 1.4,
